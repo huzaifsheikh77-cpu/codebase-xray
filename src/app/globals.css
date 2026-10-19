@@ -1,26 +1,165 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* -------------------------------------------------- tokens (dark-ready) -- */
+@theme {
+  --color-bg: #f4f3ef;
+  --color-paper: #fbfaf6;
+  --color-ink: #0a0a0a;
+  --color-acid: #c8fa4f;
+  --color-violet: #7a2bf5;
+  --color-line: #e3e1da;
+  --color-line-strong: #c9c6bc;
+  --color-muted: #6b6b66;
+
+  --color-amber: #d97706;
+  --color-critical: #dc2626;
+  --color-high: #ea580c;
+  --color-medium: #ca8a04;
+  --color-low: #6b6b66;
+
+  --radius-panel: 3px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ------------------------------------------------------------- base ------ */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+::selection {
+  background: var(--color-acid);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-violet);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------- textures ------- */
+
+/* ultra-faint CRT scanlines */
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(10, 10, 10, 0.028) 0px,
+    rgba(10, 10, 10, 0.028) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* technical blueprint grid */
+.tech-grid {
+  background-image:
+    linear-gradient(to right, var(--color-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.tech-grid-fine {
+  background-image:
+    linear-gradient(to right, var(--color-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-line) 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+
+/* ------------------------------------------------- glitch (hero only) ---- */
+.glitch {
+  position: relative;
+  display: inline-block;
+}
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.glitch::before {
+  color: var(--color-violet);
+  animation: glitch-a 4.2s infinite steps(1);
+}
+.glitch::after {
+  color: var(--color-acid);
+  animation: glitch-b 4.2s infinite steps(1);
+}
+
+@keyframes glitch-a {
+  0%, 92.5%, 96%, 100% { opacity: 0; transform: none; clip-path: none; }
+  93% { opacity: 0.85; transform: translate(-6px, 2px); clip-path: inset(12% 0 58% 0); }
+  94.5% { opacity: 0.85; transform: translate(4px, -1px); clip-path: inset(62% 0 8% 0); }
+}
+@keyframes glitch-b {
+  0%, 92%, 95.5%, 100% { opacity: 0; transform: none; clip-path: none; }
+  93.5% { opacity: 0.8; transform: translate(5px, -2px); clip-path: inset(38% 0 34% 0); }
+  95% { opacity: 0.8; transform: translate(-4px, 1px); clip-path: inset(4% 0 78% 0); }
+}
+
+/* --------------------------------------------------------- animations ---- */
+@keyframes scan-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.animate-scan-sweep {
+  animation: scan-sweep 1.6s linear infinite;
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50% { box-shadow: 0 0 0 4px transparent; opacity: 0.75; }
+}
+.animate-dot-pulse {
+  animation: dot-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-ticker {
+  animation: ticker 32s linear infinite;
+}
+
+/* ------------------------------------------------- reduced motion -------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .glitch::before,
+  .glitch::after,
+  .animate-scan-sweep,
+  .animate-dot-pulse,
+  .animate-ticker {
+    animation: none !important;
+  }
+  .glitch::before,
+  .glitch::after {
+    opacity: 0 !important;
+  }
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { checkRateLimit, resetRateLimits } from "./rate-limit";
+import { checkRateLimit, clientKeyFrom, resetRateLimits } from "./rate-limit";
 
 describe("checkRateLimit", () => {
   beforeEach(() => resetRateLimits());
@@ -26,5 +26,17 @@ describe("checkRateLimit", () => {
     for (let i = 0; i < 6; i++) checkRateLimit("a", 5_000);
     expect(checkRateLimit("a", 5_000).allowed).toBe(false);
     expect(checkRateLimit("b", 5_000).allowed).toBe(true);
+  });
+});
+
+describe("clientKeyFrom", () => {
+  const original = process.env.VERCEL;
+
+  it("does not trust Vercel-only headers outside a Vercel deployment", () => {
+    delete process.env.VERCEL;
+    const req = new Request("http://localhost/", { headers: { "x-vercel-forwarded-for": "203.0.113.9" } });
+    expect(clientKeyFrom(req)).toBe("unknown");
+    if (original === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = original;
   });
 });

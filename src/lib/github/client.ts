@@ -160,7 +160,7 @@ export class HttpGitHubClient implements GitHubClient {
   }
 
   async getRepo(owner: string, repo: string): Promise<GitHubRepoResponse> {
-    const { body } = await this.requestJson<GitHubRepoResponse>(`https://api.github.com/repos/${owner}/${repo}`, 8_000);
+    const { body } = await this.requestJson<GitHubRepoResponse>(`https://api.github.com/repos/${owner}/${repo}`, 6_000);
     return body;
   }
 
@@ -169,9 +169,9 @@ export class HttpGitHubClient implements GitHubClient {
     // A 202 means GitHub is still generating the tree (huge/fresh repos);
     // honor bounded retries instead of silently treating it as an empty tree.
     let lastStatus = 0;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, 1_000));
-      const { body, status } = await this.requestJson<GitHubTreeResponse>(url, 12_000);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 500));
+      const { body, status } = await this.requestJson<GitHubTreeResponse>(url, 8_000);
       lastStatus = status;
       if (status === 202) continue;
       if (!Array.isArray(body.tree)) throw new GitHubHttpError("UNAVAILABLE", status, "Unexpected tree response.");
@@ -183,7 +183,7 @@ export class HttpGitHubClient implements GitHubClient {
   async getBlobText(owner: string, repo: string, sha: string, maxBytes: number): Promise<string | null> {
     const { body } = await this.requestJson<GitHubBlobResponse>(
       `https://api.github.com/repos/${owner}/${repo}/git/blobs/${sha}`,
-      8_000,
+      6_000,
     );
     if (body.encoding !== "base64" || body.size > maxBytes) return null;
     const buf = Buffer.from(body.content.replace(/\n/g, ""), "base64");
@@ -196,7 +196,7 @@ export class HttpGitHubClient implements GitHubClient {
     try {
       const { body } = await this.requestJson<{ resources: { core: { limit: number; remaining: number; reset: number } } }>(
         "https://api.github.com/rate_limit",
-        5_000,
+        4_000,
       );
       const core = body.resources?.core;
       if (!core) return this.lastLimit;

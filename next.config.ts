@@ -17,6 +17,13 @@ const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  /**
+   * The TypeScript compiler API is used at runtime by the analysis route to
+   * build real syntax trees. It is a large CJS package; keeping it external
+   * avoids bundling it into every server chunk while still resolving from
+   * node_modules at runtime (it is a production dependency for that reason).
+   */
+  serverExternalPackages: ["typescript"],
   async headers() {
     return [{ source: "/(.*)", headers: SECURITY_HEADERS }];
   },

@@ -31,3 +31,17 @@ export function githubToken(): string | undefined {
 export function hasGitHubToken(): boolean {
   return Boolean(process.env.GITHUB_TOKEN?.trim());
 }
+
+/** A real Vercel production deployment (preview/development excluded). */
+export function isVercelProduction(): boolean {
+  return process.env.VERCEL_ENV === "production";
+}
+
+/**
+ * Production refuses anonymous scans by default: one medium scan costs more
+ * than GitHub's entire 60 requests/hour anonymous budget. Set
+ * ALLOW_ANONYMOUS_GITHUB=1 to opt out deliberately.
+ */
+export function githubTokenRequired(): boolean {
+  return isVercelProduction() && !hasGitHubToken() && process.env.ALLOW_ANONYMOUS_GITHUB !== "1";
+}

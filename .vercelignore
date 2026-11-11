@@ -1,0 +1,7 @@
+# Deployment upload exclusions. The build only needs source, config and public assets.
+docs/
+benchmarks/
+.github/
+.freebuff/
+.cloud-attachments/
+*.tsbuildinfo

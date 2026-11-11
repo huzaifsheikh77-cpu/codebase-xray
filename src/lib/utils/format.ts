@@ -41,6 +41,15 @@ export const BAND_COLOR: Record<Band, string> = {
   critical: "var(--color-critical)",
 };
 
+/** Darker variants for small text; the bright BAND_COLOR values are fills only. */
+export const BAND_TEXT_COLOR: Record<Band, string> = {
+  excellent: "var(--color-band-excellent)",
+  good: "var(--color-band-good)",
+  fair: "var(--color-band-fair)",
+  weak: "var(--color-band-weak)",
+  critical: "var(--color-band-critical)",
+};
+
 export const BAND_LABEL: Record<Band, string> = {
   excellent: "EXCELLENT",
   good: "GOOD",

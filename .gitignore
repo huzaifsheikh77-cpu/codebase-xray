@@ -12,6 +12,11 @@
 
 # testing
 /coverage
+/test-results/
+/playwright-report/
+
+# imported local chat attachments / transcripts (not release content)
+/.cloud-attachments/
 
 # next.js
 /.next/

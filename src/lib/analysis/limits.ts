@@ -22,7 +22,7 @@ export const LIMITS = {
   maxGraphNodes: 24,
   maxGraphEdges: 40,
   /** issue cap after sorting */
-  maxIssues: 24,
+  maxIssues: 30,
   /** file-tree nodes sent to the UI */
   maxTreeNodes: 400,
   /** max children rendered per directory in the UI tree */

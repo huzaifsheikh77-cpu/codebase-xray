@@ -1,5 +1,9 @@
-import type { Issue } from "@/lib/types/analysis";
+import type { Confidence, Issue, IssueCategory } from "@/lib/types/analysis";
 import type { AnalysisContext } from "../context";
+import type { QualitySignals } from "../quality";
+import type { SecurityRisk } from "../security-rules";
+import type { ArchitectureProfile } from "../architecture-profile";
+import type { AnalysisCoverage } from "@/lib/types/analysis";
 import type { StatsSignals } from "../extractors/stats";
 import type { DependencySignals } from "../extractors/dependencies";
 import type { DocumentationSignals } from "../extractors/docs";
@@ -25,6 +29,12 @@ export interface DetectionInput {
   security: SecuritySignals;
   arch: ArchitectureSignals;
   testing: TestingSignals;
+  /* --- vNext signals (optional so fixture-based tests stay valid) --- */
+  quality?: QualitySignals;
+  risks?: SecurityRisk[];
+  archProfile?: ArchitectureProfile;
+  unresolvedImports?: number;
+  coverage?: AnalysisCoverage;
 }
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 } as const;
@@ -77,7 +87,7 @@ function buildDetail(d: DetectionInput): Omit<Issue, "id">[] {
   for (const m of d.arch.oversizedModules.slice(0, 3)) {
     issues.push({
       title: "LARGE FILE SIZE",
-      severity: "high",
+      severity: "medium",
       detail: m.exact
         ? `This source module contains ${formatCompact(m.lines ?? 0)} lines, well above the 600-line review threshold.`
         : `This source module is ${formatCompact(Math.round(m.bytes / 1024))} KB (approx. ${formatCompact(m.bytes)} bytes), far above a typical single-module size.`,
@@ -94,7 +104,7 @@ function buildDetail(d: DetectionInput): Omit<Issue, "id">[] {
   if (d.stats.sourceFiles >= 20 && d.stats.testFiles === 0) {
     issues.push({
       title: "UNTESTED CODEBASE",
-      severity: "high",
+      severity: "medium",
       detail: `No test files were found for ${formatCompact(d.stats.sourceFiles)} source files.`,
       evidence: [
         `0 test files · ${formatCompact(d.stats.sourceFiles)} source files`,
@@ -202,12 +212,197 @@ function buildDetail(d: DetectionInput): Omit<Issue, "id">[] {
     });
   }
 
+  /* ---- measured code quality (structural, from parsed spans) ---- */
+  for (const fn of d.quality?.longFunctions.slice(0, 3) ?? []) {
+    issues.push({
+      title: "LONG FUNCTION",
+      severity: "medium",
+      detail: `${fn.name}() spans ${formatCompact(fn.lines)} lines. Long functions usually mix several responsibilities and are hard to test in isolation.`,
+      file: fn.path,
+      line: fn.line,
+      fileLineCount: undefined,
+      evidence: [
+        `${fn.lines} lines (measured from the parsed function span)`,
+        "threshold: 80 lines",
+      ],
+      recommendation: "Extract cohesive steps into named helpers; keep the public function as orchestration.",
+      category: "quality",
+      confidence: "verified",
+      detectionMethod: "Function span measured by the TypeScript compiler API / indentation parser",
+      limitation: "Line count measures size, not difficulty; a long linear function can still be simple.",
+      affectedFiles: [fn.path],
+    });
+  }
+
+  for (const fn of d.quality?.complexFunctions.slice(0, 3) ?? []) {
+    issues.push({
+      title: "HIGH CYCLOMATIC COMPLEXITY",
+      severity: "medium",
+      detail: `${fn.name}() has an estimated cyclomatic complexity of ${fn.complexity} (1 + decision points), above the review threshold of 15.`,
+      file: fn.path,
+      line: fn.line,
+      evidence: [
+        `complexity ${fn.complexity} measured across the function body`,
+        "decision points counted: if / loops / case / catch / ternary / && / || / ??",
+      ],
+      recommendation: "Split independent decision paths into separate functions and cover each branch with a test.",
+      category: "quality",
+      confidence: "high",
+      detectionMethod: "Decision-point counting over the parsed syntax tree",
+      limitation: "A proxy metric — it correlates with, but does not prove, low readability.",
+      affectedFiles: [fn.path],
+    });
+  }
+
+  for (const group of d.quality?.duplicateGroups.slice(0, 2) ?? []) {
+    issues.push({
+      title: "DUPLICATED CODE BLOCK",
+      severity: "low",
+      detail: `The same normalised ${group.lines}-line block appears in ${group.files.length} files. Copies drift independently once they stop being edited together.`,
+      file: group.files[0],
+      evidence: [
+        `${group.files.length} files share an identical normalised block (${group.blocks} occurrence${group.blocks === 1 ? "" : "s"})`,
+        `files: ${group.files.slice(0, 4).join(", ")}`,
+      ],
+      recommendation: "Extract the shared block into one module and import it from each site.",
+      category: "quality",
+      confidence: "heuristic",
+      detectionMethod: "Normalised 6-line shingle comparison",
+      limitation: "Textual similarity only — semantically different code can normalise to the same block.",
+      affectedFiles: group.files,
+    });
+  }
+
+  /* ---- unresolved internal imports (module boundaries) ---- */
+  const unresolved = d.unresolvedImports ?? 0;
+  if (unresolved > 0) {
+    issues.push({
+      title: "UNRESOLVED INTERNAL IMPORTS",
+      severity: "low",
+      detail: `${formatCompact(unresolved)} internal import${unresolved === 1 ? "" : "s"} could not be mapped to an inspected module, so the graph is incomplete for those edges.`,
+      evidence: [
+        `${formatCompact(unresolved)} specifier(s) resolved to no node`,
+        "causes: path aliases without tsconfig paths, workspace packages outside the sample, generated modules",
+      ],
+      recommendation: "Declare path aliases in tsconfig.json and ensure workspace packages are inspectable so the graph can resolve them.",
+      category: "architecture",
+      confidence: "high",
+      detectionMethod: "Import specifiers parsed then matched against the module node set",
+      limitation: "Edges are omitted, never invented; an unresolved import may reference a file outside the inspected sample.",
+    });
+  }
+
+  /* ---- security risk patterns (each carries verification advice) ---- */
+  for (const risk of d.risks?.slice(0, 6) ?? []) {
+    issues.push({
+      title: risk.title,
+      severity: risk.severity,
+      detail: `${risk.detail} ${risk.consequence}`,
+      file: risk.path,
+      line: risk.line,
+      evidence: [
+        `rule ${risk.ruleId} matched at ${risk.path}:${risk.line}`,
+        `verification: ${risk.verification}`,
+      ],
+      recommendation: risk.recommendation,
+      category: "security",
+      confidence: risk.confidence,
+      detectionMethod: "Pattern matching over fetched content (no taint analysis)",
+      limitation: "A pattern match is an indicator, not a confirmed vulnerability. No data-flow analysis was performed.",
+      affectedFiles: [risk.path],
+    });
+  }
+
   return issues;
 }
 
-/** Run all detectors, sort deterministically, assign stable IDs. */
+/**
+ * Category / confidence / method for detectors that predate the evidence
+ * model. Anything a detector sets explicitly wins over this table.
+ */
+const ISSUE_META: Record<string, { category: IssueCategory; confidence: Confidence; detectionMethod: string; limitation?: string }> = {
+  "HARDCODED CREDENTIAL PATTERN": {
+    category: "security",
+    confidence: "high",
+    detectionMethod: "Known-token-format regex over fetched content; values redacted and discarded",
+    limitation: "May be a documentation example or fixture; the value is never retained for confirmation.",
+  },
+  "COMMITTED ENVIRONMENT FILE": {
+    category: "security",
+    confidence: "verified",
+    detectionMethod: "Tree inspection of committed filenames",
+    limitation: "Proves the file is committed, not that it contains live secrets.",
+  },
+  "LARGE FILE SIZE": {
+    category: "quality",
+    confidence: "high",
+    detectionMethod: "Exact line count when fetched, tree byte size otherwise",
+    limitation: "Size alone is a review signal, not a defect in itself.",
+  },
+  "UNTESTED CODEBASE": {
+    category: "testing",
+    confidence: "high",
+    detectionMethod: "Test-file classification over the eligible tree",
+    limitation: "Tests outside conventional naming/tree patterns are not detected.",
+  },
+  "MISSING LICENSE": {
+    category: "documentation",
+    confidence: "verified",
+    detectionMethod: "Root tree inspection plus repository metadata",
+  },
+  "MISSING README": {
+    category: "documentation",
+    confidence: "verified",
+    detectionMethod: "Root tree inspection",
+  },
+  "THIN README": {
+    category: "documentation",
+    confidence: "verified",
+    detectionMethod: "Byte size of the fetched README",
+    limitation: "Length is not quality; a short README can still be complete.",
+  },
+  "SECRET-LIKE FILENAMES": {
+    category: "security",
+    confidence: "heuristic",
+    detectionMethod: "Filename pattern match (contents not necessarily inspected)",
+    limitation: "Filename-only signal; fixtures and public keys are common false positives.",
+  },
+  "DEEP DIRECTORY NESTING": {
+    category: "architecture",
+    confidence: "heuristic",
+    detectionMethod: "Path depth distribution",
+    limitation: "Deep nesting is a style signal; some generated layouts require it.",
+  },
+  "GOD DIRECTORY": {
+    category: "architecture",
+    confidence: "high",
+    detectionMethod: "Directory size relative to the repository's own p90",
+    limitation: "A large directory can be intentional (e.g. a fixture corpus).",
+  },
+  "NO CI PIPELINE": {
+    category: "maintainability",
+    confidence: "verified",
+    detectionMethod: "Presence check for .github/workflows/*.yml in the tree",
+    limitation: "CI on another platform (GitLab, Jenkins, CircleCI config elsewhere) is not detected.",
+  },
+  "UNPINNED DEPENDENCIES": {
+    category: "dependencies",
+    confidence: "high",
+    detectionMethod: "Version-range parsing of the root npm manifest",
+    limitation: "Lockfile detection covers common filenames only.",
+  },
+};
+
+/** Run all detectors, sort deterministically, assign stable IDs and evidence metadata. */
 export function detectIssues(input: DetectionInput): Issue[] {
   const issues = buildDetail(input);
   issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.title.localeCompare(b.title));
-  return issues.slice(0, 24).map((issue, i) => ({ ...issue, id: `ISS-${String(i + 1).padStart(3, "0")}` }));
+  return issues.slice(0, 30).map((issue, i) => {
+    const meta = ISSUE_META[issue.title];
+    return {
+      ...meta,
+      ...issue,
+      id: `ISS-${String(i + 1).padStart(3, "0")}`,
+    };
+  });
 }

@@ -1,4 +1,4 @@
-import type { Insight } from "@/lib/types/analysis";
+import type { Confidence, Insight } from "@/lib/types/analysis";
 import { formatCompact } from "@/lib/utils/format";
 import type { DetectionInput } from "./issues/detectors";
 
@@ -96,11 +96,11 @@ export function buildInsights(s: DetectionInput): Insight[] {
     title:
       s.security.secretFindings.length > 0 || s.security.committedEnvFiles.length > 0
         ? "Credential hygiene needs attention"
-        : "Credential hygiene looks clean",
+        : "No content-level credential signals",
     explanation:
       s.security.secretFindings.length > 0 || s.security.committedEnvFiles.length > 0
         ? "The scanner found high-confidence credential signals. Values are redacted; review and rotate anything real."
-        : "No committed environment files, no high-confidence credential patterns, and no key-like filenames were detected in the inspected set.",
+        : "No committed environment files and no high-confidence credential patterns were detected in the inspected set. Filename-level signals are reported separately as findings and can be false positives (fixtures, .npmrc).",
     evidence: [
       `${s.security.secretFindings.length} pattern match${s.security.secretFindings.length === 1 ? "" : "es"} (redacted)`,
       `${s.security.committedEnvFiles.length} committed env file${s.security.committedEnvFiles.length === 1 ? "" : "s"}`,
@@ -130,5 +130,12 @@ export function buildInsights(s: DetectionInput): Insight[] {
       : "Add a README with project purpose, install steps, and a quick-start example.",
   });
 
-  return out;
+  // Confidence reflects the evidence behind each rule, not the eloquence of
+  // its prose: rules over measured counts are "high", structural readings
+  // are "heuristic".
+  const highConfidence = new Set(["INS-01", "INS-04", "INS-05"]);
+  return out.map((insight) => ({
+    ...insight,
+    confidence: (highConfidence.has(insight.id) ? "high" : "heuristic") as Confidence,
+  }));
 }

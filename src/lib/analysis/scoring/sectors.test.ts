@@ -80,6 +80,23 @@ describe("scoring", () => {
     expect(clean - dirty).toBeGreaterThanOrEqual(20);
   });
 
+  it("counts root-level p-map test files instead of depressing testing", () => {
+    const files = Object.fromEntries(sourceFiles(4));
+    const rootTests = {
+      "test.js": "import test from 'ava';\ntest('x', () => {});",
+      "test-d.ts": "import { pMap } from './index.js';",
+      "index.js": "export default function pMap() {}",
+    };
+    const entries = Object.keys({ ...files, ...rootTests }).map((p) =>
+      entry(p, (files[p] ?? rootTests[p as keyof typeof rootTests]).length),
+    );
+    const signals = buildSignals(makeCtx(entries, { ...files, ...rootTests }));
+
+    expect(signals.testing.testFiles).toBe(2);
+    expect(signals.testing.ratio).toBeGreaterThan(0);
+    expect(scoreTesting(signals).score.value).toBeGreaterThan(0);
+  });
+
   it("damps tiny repositories toward the middle", () => {
     const files = Object.fromEntries(sourceFiles(3, 40)); // tiny repo, big files ratio-wise
     const entries = Object.keys(files).map((p) => entry(p, files[p].length));

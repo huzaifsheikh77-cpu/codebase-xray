@@ -8,8 +8,17 @@
  * - Small-repository damping (see sectors.ts): repositories below
  *   SMALL_REPO_* thresholds produce low-confidence evidence, so the sector
  *   score is pulled toward the neutral 50 midpoint instead of the extreme —
- *   a 3-file repo must not yield a misleading 0 or 100.
+ *   a 3-file repo must not yield a misleading 0 or 100. Damping is applied
+ *   to ALL SIX sectors (previously security and documentation escaped it,
+ *   producing 100/100 on a one-file repository).
  */
+
+/**
+ * Methodology version. Scores are only comparable within one version: any
+ * change to weights, thresholds or damping must bump this string, and it is
+ * emitted in `analysis.scoringVersion`.
+ */
+export const SCORING_VERSION = "xray.score v3.0.0";
 
 export const SMALL_REPO_MIN_SOURCES = 10;
 export const SMALL_REPO_MIN_LOC = 1_000;
@@ -24,11 +33,12 @@ export const SECTOR_WEIGHTS = {
   maintainability: 0.15,
 } as const;
 
-/** Code Quality — penalised by size extremes, TODO churn and nesting */
+/** Code Quality — penalised by size extremes, measured function pressure, TODOs and nesting */
 export const CODE_QUALITY_WEIGHTS = {
-  oversizedRatio: 40, // share of source modules exceeding review thresholds
-  largestFileShare: 25, // largest module's share of total LOC
-  todoDensity: 20, // TODO/FIXME/HACK density in fetched files
+  oversizedRatio: 35, // share of source modules exceeding review thresholds
+  largestFileShare: 20, // largest module's share of total LOC
+  measuredFunctions: 15, // measured long/complex functions (structural)
+  todoDensity: 15, // TODO/FIXME/HACK density in fetched files
   nesting: 15, // deep-path pressure
 } as const;
 
@@ -40,6 +50,9 @@ export const SECURITY_PENALTIES = {
   secretFindingsCap: 60,
   secretLikeFilename: 10, // per file, capped
   secretLikeFilenamesCap: 20,
+  /** risk-pattern findings (eval/exec/SQL interpolation/…) */
+  riskFinding: 6,
+  riskFindingsCap: 30,
 } as const;
 export const SECURITY_BONUSES = {
   securityPolicy: 5, // SECURITY.md
@@ -58,10 +71,11 @@ export const TESTING_RATIO_TARGET = 0.5;
 
 /** Architecture */
 export const ARCHITECTURE_WEIGHTS = {
-  organization: 35, // src-dir / workspace organization
-  oversizedPressure: 30, // oversized modules as share of sources
-  nesting: 20, // deep-path pressure
-  godDirs: 15, // extreme directory outliers
+  organization: 30, // src-dir / workspace organization
+  oversizedPressure: 25, // oversized modules as share of sources
+  nesting: 15, // deep-path pressure
+  godDirs: 10, // extreme directory outliers
+  boundaries: 20, // unresolved internal imports (weaker boundaries)
 } as const;
 
 /** Documentation — additive points, clamped to 100 */

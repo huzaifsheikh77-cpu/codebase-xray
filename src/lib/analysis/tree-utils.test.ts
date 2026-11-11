@@ -1,12 +1,35 @@
 import { describe, expect, it } from "vitest";
 import type { GitHubTreeEntry } from "@/lib/github/endpoints";
-import { isVendoredPath, prioritize } from "./tree-utils";
+import { classifyPath, isVendoredPath, prioritize } from "./tree-utils";
 
 function entry(path: string, size = 100): GitHubTreeEntry {
   return { path, mode: "100644", type: "blob", size, sha: `sha-${path}` };
 }
 
 const paths = (entries: GitHubTreeEntry[]): string[] => entries.map((e) => e.path);
+
+describe("test-file classification", () => {
+  it.each([
+    "test.js",
+    "test-d.ts",
+    "index.test-d.ts",
+    "src/a.test.ts",
+    "src/a.spec.tsx",
+    "tests/unit.py",
+    "test_pkg.py",
+    "pkg/foo_test.go",
+    "spec/models/user_spec.rb",
+    "__tests__/button.tsx",
+  ])("classifies %s as a test", (path) => {
+    expect(classifyPath(path)).toBe("test");
+  });
+
+  it("does not classify ordinary source names as tests", () => {
+    expect(classifyPath("src/contest.ts")).toBe("source");
+    expect(classifyPath("src/latest.ts")).toBe("source");
+    expect(classifyPath("src/testing-utils.ts")).toBe("source");
+  });
+});
 
 describe("prioritize (content-fetch order)", () => {
   it("puts workspace manifests and real source ahead of a larger vendored bundle", () => {

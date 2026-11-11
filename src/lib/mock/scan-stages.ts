@@ -1,99 +1,69 @@
 import type { ScanStage } from "@/lib/types/analysis";
 
 /**
- * The nine scan stages of the simulated analysis.
+ * The nine stages of the scan readout.
+ *
+ * These lines describe what the engine actually does. They are NOT
+ * telemetry: no cloning speed, no AST-progress counters, no invented quota
+ * numbers. The UI labels the progress as illustrative because the real work
+ * happens server-side in one request.
+ *
  * `weight` is relative; the timer driver normalizes all weights to the
- * total scan duration (5–7s). Pure data — no timing logic here.
+ * animation duration. Pure data — no timing logic here.
  */
 export const SCAN_STAGES: ScanStage[] = [
   {
     id: "init",
     label: "INITIALIZING X-RAY",
     weight: 6,
-    log: [
-      "xray.engine v2.7.3 — cold start",
-      "loading analysis profiles",
-      "sandbox ready",
-    ],
+    log: ["xray.engine v3.0.0", "loading inspection budget", "deterministic engine ready"],
   },
   {
     id: "connect",
     label: "CONNECTING TO GITHUB",
     weight: 7,
-    log: [
-      "resolving github.com",
-      "tls handshake ok",
-      "rate-limit budget: 4,981 / 5,000",
-    ],
+    log: ["requesting repository metadata", "GitHub REST API (server-side)", "no repository code is executed"],
   },
   {
     id: "fetch",
-    label: "FETCHING REPOSITORY",
+    label: "READING FILE TREE",
     weight: 14,
-    log: [
-      "GET repos/nebula-labs/orbit-forge",
-      "cloning @ 12.4 MB/s",
-      "objects: 18,204 · delta: 312",
-    ],
+    log: ["fetching recursive tree", "classifying files", "applying content filters"],
   },
   {
     id: "parse",
-    label: "PARSING FILE STRUCTURE",
+    label: "PARSING SOURCE STRUCTURE",
     weight: 12,
-    log: [
-      "walking tree (depth 9)",
-      "indexing 1,248 files",
-      "ast parse: ts/tsx/py/go",
-    ],
+    log: ["prioritising files within budget", "parsing TypeScript/JavaScript syntax trees", "Python uses indentation analysis"],
   },
   {
     id: "deps",
     label: "ANALYZING DEPENDENCIES",
     weight: 11,
-    log: [
-      "resolving 12 direct deps",
-      "lockfile audit: 0 critical",
-      "graph edges: 47",
-    ],
+    log: ["reading manifests and lockfiles", "resolving workspace relationships", "mapping import specifiers"],
   },
   {
     id: "quality",
-    label: "SCANNING CODE QUALITY",
+    label: "MEASURING CODE STRUCTURE",
     weight: 13,
-    log: [
-      "complexity pass · 6 hotspots",
-      "duplication: 4.2%",
-      "type coverage: 91.4%",
-    ],
+    log: ["measuring function spans", "counting decision points", "comparing normalised blocks"],
   },
   {
     id: "security",
-    label: "CHECKING SECURITY",
+    label: "CHECKING SECURITY SIGNALS",
     weight: 12,
-    log: [
-      "secret scan: 1 finding",
-      "sast rules: 214 applied",
-      "supply chain: 2 advisories",
-    ],
+    log: ["scanning credential patterns (values redacted)", "checking risky configuration patterns", "recording verification advice"],
   },
   {
     id: "map",
     label: "BUILDING CODEBASE MAP",
     weight: 12,
-    log: [
-      "clustering modules",
-      "iso projection: 8 sectors",
-      "layout solver converged",
-    ],
+    log: ["grouping modules", "resolving aliases", "counting unresolved imports"],
   },
   {
     id: "report",
     label: "GENERATING REPORT",
     weight: 13,
-    log: [
-      "scoring 6 sectors",
-      "compiling evidence chains",
-      "report ready",
-    ],
+    log: ["scoring six sectors", "attaching evidence", "writing coverage limits"],
   },
 ];

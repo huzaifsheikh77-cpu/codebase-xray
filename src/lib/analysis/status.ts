@@ -1,10 +1,11 @@
-import type { SystemService } from "@/lib/types/analysis";
+import type { AiStatus, SystemService } from "@/lib/types/analysis";
 import type { RateLimitSnapshot } from "@/lib/github/client";
 
 /**
  * /07 SYSTEM STATUS — built from real signals of the scan that just ran.
- * The AI engine is reported honestly as offline (rule-based insights run
- * in-process; no model is connected in this phase).
+ * The AI row reflects configuration only: it is "ready" when a provider key
+ * exists, otherwise "offline" with a truthful reason. No model call happens
+ * during analysis.
  */
 export function buildSystemStatus(params: {
   githubLatencyMs: number;
@@ -13,8 +14,9 @@ export function buildSystemStatus(params: {
   scanDurationMs: number;
   partial: boolean;
   now: Date;
+  ai: AiStatus;
 }): SystemService[] {
-  const { githubLatencyMs, rateLimit, engineVersion, scanDurationMs, partial, now } = params;
+  const { githubLatencyMs, rateLimit, engineVersion, scanDurationMs, partial, now, ai } = params;
   const checkedAt = now.toISOString();
 
   return [
@@ -45,10 +47,10 @@ export function buildSystemStatus(params: {
     {
       id: "ai",
       label: "AI ENGINE",
-      status: "offline",
+      status: ai.available ? "ready" : "offline",
       latencyMs: 0,
       lastChecked: checkedAt,
-      version: "RULE-BASED — NOT CONNECTED",
+      version: ai.available ? `${ai.provider.toUpperCase()} · ${ai.model ?? "MODEL"}` : "NOT CONFIGURED — AI_API_KEY",
     },
   ];
 }

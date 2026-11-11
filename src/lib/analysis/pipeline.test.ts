@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GitHubClient, RateLimitSnapshot } from "@/lib/github/client";
 import type { GitHubRepoResponse, GitHubTreeEntry } from "@/lib/github/endpoints";
 import { runAnalysis } from "./pipeline";
+import { planBudget } from "./budgets";
 
 /** Fake client — the engine must work against pure data, never the network. */
 function makeFakeClient(files: Record<string, string>, branch = "main"): GitHubClient {
@@ -102,7 +103,14 @@ describe("runAnalysis (injected fake client)", () => {
 
     const strip = (x: typeof a) => ({
       ...x,
-      analysis: { ...x.analysis, generatedAt: "", scanId: "", durationMs: 0, rateLimitRemaining: undefined },
+      analysis: {
+        ...x.analysis,
+        generatedAt: "",
+        scanId: "",
+        durationMs: 0,
+        rateLimitRemaining: undefined,
+        aiToken: undefined,
+      },
       system: [] as typeof x.system,
     });
     expect(strip(a)).toEqual(strip(b));
@@ -196,15 +204,18 @@ describe("runAnalysis (injected fake client)", () => {
     expect(analysis.analysis.warnings?.some((w) => /TREE TRUNCATED/.test(w))).toBe(true);
   });
 
-  it("flags a sampled scan as partial when the tree exceeds the 24-file fetch cap (regression: vercel/next.js reported COMPLETE after reading 24 of 34,271 files)", async () => {
-    // 60 eligible files > LIMITS.maxFilesFetched (24)
+  it("flags a sampled scan as partial when the tree exceeds the adaptive file budget (regression: vercel/next.js reported COMPLETE after reading 24 of 34,271 files)", async () => {
+    // 61 eligible files > the small-tier budget (48), so the scan must say so.
     const files: Record<string, string> = { "README.md": "# big fixture\n" };
     for (let i = 0; i < 60; i++) files[`src/mod${i}.ts`] = `export const v${i} = ${i};\n`;
     const analysis = await runAnalysis(makeFakeClient(files), { owner: "t", repo: "big", now: new Date() });
+    const budget = planBudget(61);
     expect(analysis.analysis.partial).toBe(true);
     expect(analysis.analysis.warnings?.some((w) => /SAMPLED COVERAGE/.test(w))).toBe(true);
-    expect(analysis.structure.stats.analyzedFiles).toBe(24);
+    expect(analysis.structure.stats.analyzedFiles).toBe(budget.maxFiles);
     expect(analysis.structure.stats.totalFiles).toBe(61);
+    expect(analysis.analysis.coverage?.inspectedPct).toBeLessThan(100);
+    expect(analysis.analysis.coverage?.eligibleFiles).toBe(61);
   });
 
   it("does not flag coverage when every eligible file fits in the fetch cap", async () => {
@@ -218,8 +229,10 @@ describe("runAnalysis (injected fake client)", () => {
     // force budget pressure: simulate getBlobText refusing everything
     client.getBlobText = async () => null;
     const analysis = await runAnalysis(client, { owner: "test", repo: "fixture", now: new Date() });
-    // all-null blobs is a legitimate (empty) fetch — manifests present but unfetched
-    expect(analysis.analysis.partial).toBeUndefined(); // budget not exceeded, just nothing fetched
+    // Nothing was fetched, so nothing was inspected — the scan is partial and
+    // says why. "Complete" must never describe an empty sample.
+    expect(analysis.analysis.partial).toBe(true);
+    expect(analysis.analysis.warnings?.some((w) => /CRITICAL PATH NOT FULLY INSPECTED/.test(w))).toBe(true);
     expect(analysis.structure.stats.totalFiles).toBe(10);
   });
 });

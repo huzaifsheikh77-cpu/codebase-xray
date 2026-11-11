@@ -5,6 +5,7 @@
 
 import { BINARY_EXTENSIONS, IGNORED_DIRS, LIMITS } from "./limits";
 import { isSourceLanguagePath } from "./languages";
+import { classifyCritical } from "./critical";
 import type { GitHubTreeEntry } from "@/lib/github/endpoints";
 
 export type PathKind = "source" | "test" | "config" | "docs" | "other";
@@ -36,13 +37,14 @@ export function isIgnoredPath(path: string): boolean {
   return path.split("/").some((seg) => IGNORED_DIRS.has(seg));
 }
 
-const TEST_FILE_RE = /(\.(test|spec)\.[jtsx]+$|_test\.(go|py|rs)$|\.test\.ts$|test_[^/]*\.py$|\/tests?\/|\/__tests__\/|\/spec\/)/i;
+const TEST_FILE_RE = /(^|\/)(tests?|spec|__tests__)\//i;
+const TEST_FILE_NAME_RE = /(\.(test|spec)\.[cm]?[jt]sx?$|\.(test|spec)-d\.[cm]?[jt]sx?$|(^|\/)test-d\.[cm]?[jt]sx?$|(^|\/)test\.[cm]?[jt]sx?$|(^|\/)tests?\.py$|test_[^/]*\.py$|_test\.(go|py|rs)$|_spec\.rb$)/i;
 const CONFIG_RE = /(^|\/)(\.[a-z]*rc|.*\.config\.[cm]?[jt]s|tsconfig[^/]*\.json|.*\.ya?ml$|.*\.toml$|Dockerfile[^/]*$|Makefile$|\.env\.[^/]+|package\.json)$/i;
 const DOCS_RE = /(^|\/)(docs?|documentation)(\/|$)|\.(md|mdx|rst|adoc)$/i;
 
 /** Rough classification used for stats and scoring signals. */
 export function classifyPath(path: string): PathKind {
-  if (TEST_FILE_RE.test(path)) return "test";
+  if (TEST_FILE_RE.test(path) || TEST_FILE_NAME_RE.test(path)) return "test";
   if (isSourceLanguagePath(path)) return "source";
   if (CONFIG_RE.test(path)) return "config";
   if (DOCS_RE.test(path)) return "docs";
@@ -170,9 +172,23 @@ export function prioritize(entries: GitHubTreeEntry[], sampleTestFiles: number):
     [8, 2], // vendored bundles: last resort only
   ]);
 
+  // Within the same tier, security-sensitive paths (auth / api / data /
+  // entry) are fetched before generic source of the same size class. This is
+  // a prioritisation signal only — it never changes what a finding claims.
+  const criticalRank = (path: string): number => {
+    const cls = classifyCritical(path);
+    return cls && cls.category !== "test" ? 0 : 1;
+  };
+
   const withRank = entries.map((e) => ({ e, r: rank(e) }));
-  // stable order within a rank: by bytes desc, then path (deterministic)
-  withRank.sort((a, b) => a.r - b.r || (b.e.size ?? 0) - (a.e.size ?? 0) || (a.e.path < b.e.path ? -1 : 1));
+  // stable order within a rank: critical first, then bytes desc, then path
+  withRank.sort(
+    (a, b) =>
+      a.r - b.r ||
+      criticalRank(a.e.path) - criticalRank(b.e.path) ||
+      (b.e.size ?? 0) - (a.e.size ?? 0) ||
+      (a.e.path < b.e.path ? -1 : 1),
+  );
 
   const picked: GitHubTreeEntry[] = [];
   const overflow: GitHubTreeEntry[] = [];

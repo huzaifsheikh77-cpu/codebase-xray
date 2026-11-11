@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 interface MeterProps {
   value: number; // 0–100
   color?: string;
+  /** Accessible name; every progressbar must have one. */
+  label?: string;
   className?: string;
   /** ms for the fill animation */
   duration?: number;
@@ -13,7 +15,14 @@ interface MeterProps {
 }
 
 /** Interactive-free meter that animates its fill on mount. */
-export function Meter({ value, color = "var(--color-acid)", className, duration = 900, delay = 100 }: MeterProps) {
+export function Meter({
+  value,
+  color = "var(--color-acid)",
+  label = "Score",
+  className,
+  duration = 900,
+  delay = 100,
+}: MeterProps) {
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
@@ -27,6 +36,7 @@ export function Meter({ value, color = "var(--color-acid)", className, duration 
     <div
       className={`relative h-2 w-full overflow-hidden border border-line bg-bg ${className ?? ""}`}
       role="progressbar"
+      aria-label={label}
       aria-valuenow={Math.round(value)}
       aria-valuemin={0}
       aria-valuemax={100}

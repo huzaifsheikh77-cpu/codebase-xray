@@ -5,24 +5,29 @@ import { SectionShell } from "@/components/ui/section-shell";
 import { DemoBadge, useAnalysisMode } from "@/components/ui/demo-badge";
 import type { RepoAnalysis } from "@/lib/types/analysis";
 
+/**
+ * /06 — rule-based insights. These are deterministic rules over measured
+ * counts; no model is involved. The heading says so, and each card carries
+ * its evidence confidence.
+ */
 export function InsightsSection({ insights }: { insights: RepoAnalysis["insights"] }) {
   const isDemo = useAnalysisMode();
   return (
     <SectionShell
       id="insights"
       number="06"
-      title="AI Insights"
+      title="Rule-Based Insights"
       meta={
         <span className="flex items-center gap-2">
           <DemoBadge />
-          <span>RULE-BASED HEURISTICS — NO MODEL OUTPUT IN THIS PHASE</span>
+          <span>DETERMINISTIC RULES — NO MODEL OUTPUT</span>
         </span>
       }
     >
       <p className="mb-6 max-w-2xl font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
         {isDemo
-          ? "DEMO AI INSIGHTS · GENERATED FROM THE MOCK PAYLOAD — A LIVE MODEL WILL REPLACE THESE IN A LATER PHASE"
-          : "HEURISTIC INSIGHTS · DERIVED FROM THE LIVE SCAN BY DETERMINISTIC RULES — NO MODEL OUTPUT"}
+          ? "DEMO INSIGHTS · GENERATED FROM THE MOCK PAYLOAD BY THE SAME RULES THE LIVE ENGINE USES"
+          : "DERIVED FROM THE LIVE SCAN BY DETERMINISTIC RULES — NO MODEL OUTPUT. THE AI ASSISTANT IS A SEPARATE, OPTIONAL LAYER"}
       </p>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -32,10 +37,17 @@ export function InsightsSection({ insights }: { insights: RepoAnalysis["insights
             <header className="flex items-center justify-between gap-2 border-b border-line pb-2.5">
               <span className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-violet">
                 <Sparkles className="size-3" aria-hidden />
-                AI INSIGHT /{String(i + 1).padStart(2, "0")}
+                INSIGHT /{String(i + 1).padStart(2, "0")}
               </span>
-              <span className="border border-line-strong px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
-                {ins.tag}
+              <span className="flex items-center gap-1.5">
+                {ins.confidence && (
+                  <span className="border border-line-strong px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
+                    {ins.confidence.toUpperCase()}
+                  </span>
+                )}
+                <span className="border border-line-strong px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
+                  {ins.tag}
+                </span>
               </span>
             </header>
             <h3 className="mt-3 text-base font-bold leading-snug">{ins.title}</h3>

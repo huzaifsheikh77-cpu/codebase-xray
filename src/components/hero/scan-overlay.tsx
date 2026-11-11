@@ -11,23 +11,26 @@ interface ScanOverlayProps {
   progress: number;
   elapsedMs: number;
   stages: ScanStage[];
+  onCancel?: () => void;
 }
 
 /**
  * Full scan readout: stage list with completion ticks, progress bar with
- * sweeping highlight, elapsed clock, and a live monospace log. Pure
- * presentation — the timer driver lives in the shell.
+ * sweeping highlight, elapsed clock, and a monospace log.
+ *
+ * The progress is a UI device, not a measurement: the real scan runs
+ * server-side in a single request and cannot report per-stage progress.
+ * The caption below the header states this so the readout is never
+ * mistaken for telemetry.
  */
-export function ScanOverlay({ stageIndex, progress, elapsedMs, stages }: ScanOverlayProps) {
+export function ScanOverlay({ stageIndex, progress, elapsedMs, stages, onCancel }: ScanOverlayProps) {
   const logRef = useRef<HTMLDivElement>(null);
   const done = stageIndex >= stages.length;
   const current = stages[Math.min(stageIndex, stages.length - 1)];
 
   const logLines = stages.slice(0, stageIndex).flatMap((s) => s.log);
   const stageSpan = 100 / stages.length;
-  const stageProgress = done
-    ? 1
-    : Math.min(1, Math.max(0, (progress - stageSpan * stageIndex) / stageSpan));
+  const stageProgress = done ? 1 : Math.min(1, Math.max(0, (progress - stageSpan * stageIndex) / stageSpan));
   const activeLines = done ? [] : current.log.slice(0, Math.max(1, Math.ceil(stageProgress * current.log.length)));
 
   useEffect(() => {
@@ -38,12 +41,28 @@ export function ScanOverlay({ stageIndex, progress, elapsedMs, stages }: ScanOve
     <div className="scanlines relative border border-ink bg-paper">
       <div className="flex items-center justify-between border-b border-ink px-4 py-2">
         <span className="font-mono text-[10px] font-bold uppercase tracking-[0.2em]">
-          X-RAY SCAN — {done ? "FINALIZING" : current.label}
+          X-RAY SCAN — {done ? "COMPLETE" : current.label}
         </span>
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
           T+{formatElapsed(elapsedMs)}
         </span>
       </div>
+
+      <p className="border-b border-line bg-bg px-4 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
+        ILLUSTRATIVE PROGRESS — THE ANALYSIS RUNS SERVER-SIDE AND RETURNS WHEN READY
+      </p>
+
+      {onCancel && (
+        <div className="flex justify-end border-b border-line px-4 py-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="border border-critical px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-critical hover:bg-critical hover:text-paper focus-visible:outline-acid"
+          >
+            CANCEL SCAN
+          </button>
+        </div>
+      )}
 
       {/* progress */}
       <div className="border-b border-line px-4 py-3">
@@ -82,7 +101,7 @@ export function ScanOverlay({ stageIndex, progress, elapsedMs, stages }: ScanOve
         })}
       </ol>
 
-      {/* live log — completed stages then the active stage's revealed lines */}
+      {/* log — completed stages then the active stage's revealed lines */}
       <div ref={logRef} className="h-40 overflow-y-auto border-t border-line bg-ink px-4 py-3 font-mono text-[11px] leading-relaxed text-acid">
         {[...logLines, ...activeLines].map((line, i) => (
           <p key={i} className="whitespace-pre-wrap">

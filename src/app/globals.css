@@ -17,6 +17,18 @@
   --color-medium: #ca8a04;
   --color-low: #6b6b66;
 
+  /* Dark text variants. The bright accents above are used for meters, dots
+     and borders only; 9px labels need at least 4.5:1 contrast on paper. */
+  --color-band-excellent: #3f6212;
+  --color-band-good: #3f6212;
+  --color-band-fair: #92400e;
+  --color-band-weak: #5b21b6;
+  --color-band-critical: #991b1b;
+  --color-severity-critical-text: #991b1b;
+  --color-severity-high-text: #9a3412;
+  --color-severity-medium-text: #854d0e;
+  --color-severity-low-text: #52525b;
+
   --radius-panel: 3px;
 }
 

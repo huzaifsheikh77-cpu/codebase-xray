@@ -12,25 +12,29 @@ import { SCAN_STAGES } from "@/lib/mock/scan-stages";
 import { MOCK_ANALYSIS } from "@/lib/mock/repo-analysis";
 import type { AnalysisError, RepoAnalysis, ScanPhase } from "@/lib/types/analysis";
 
-const TOTAL_SCAN_MS = 6200; // within the required 5–7s window
+/**
+ * Demo mode has no server round trip, so a short simulated readout is shown
+ * and labelled as simulated. A LIVE scan no longer waits for any timer: the
+ * report appears the moment the server answers (previously every scan was
+ * held for 6.2 s regardless of real duration).
+ */
+const DEMO_SCAN_MS = 2400;
+/** Progress animation maps elapsed → 99% over this window, then holds. */
+const PROGRESS_WINDOW_MS = 5000;
 
-/** Normalized per-stage durations from stage weights. */
-const STAGE_DURATIONS = (() => {
-  const total = SCAN_STAGES.reduce((acc, s) => acc + s.weight, 0);
-  return SCAN_STAGES.map((s) => (s.weight / total) * TOTAL_SCAN_MS);
-})();
-
-const SECTION_IDS = ["sys", "analyze", "score", "structure", "map", "issues", "insights", "status"];
+const SECTION_IDS = ["sys", "analyze", "score", "structure", "map", "issues", "insights", "status", "coverage", "assistant"];
 
 /** The fictional demo repo runs offline on the bundled mock payload. */
 const DEMO_SLUG = "nebula-labs/orbit-forge";
 
+interface ScanResult {
+  analysis?: RepoAnalysis;
+  error?: AnalysisError;
+}
+
 /**
  * The one-page shell. Owns the phase state machine:
  *   idle → scanning → complete | error
- * The scan overlay stays on the deterministic rAF timer (visual experience
- * preserved); the real API call runs in parallel and the results are applied
- * only when BOTH the timer has finished and the response has arrived.
  */
 export function XRayExperience() {
   const [phase, setPhase] = useState<ScanPhase>("idle");
@@ -43,22 +47,30 @@ export function XRayExperience() {
 
   const startRef = useRef(0);
   const rafRef = useRef<number>(0);
-
-  /** pending response + timer-done flag meet in tryFinish() */
-  const pendingRef = useRef<{ analysis?: RepoAnalysis; error?: AnalysisError } | null>(null);
-  const timerDoneRef = useRef(false);
+  /** increments per scan — late responses from an older scan are ignored */
+  const tokenRef = useRef(0);
   const lastUrlRef = useRef("");
+  const controllerRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   const active = useScrollSpy(SECTION_IDS, phase === "complete");
 
-  const tryFinish = useCallback(() => {
-    if (!timerDoneRef.current || !pendingRef.current) return;
-    const result = pendingRef.current;
-    pendingRef.current = null;
+  const finish = useCallback((token: number, result: ScanResult) => {
+    if (token !== tokenRef.current) return;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    controllerRef.current = null;
+    setProgress(100);
+    setStageIndex(SCAN_STAGES.length);
+    setElapsedMs(performance.now() - startRef.current);
     if (result.error) {
       setError(result.error);
       setPhase("error");
-    } else if (result.analysis) {
+      return;
+    }
+    if (result.analysis) {
       setAnalysis(result.analysis);
       setPhase("complete");
     }
@@ -66,6 +78,13 @@ export function XRayExperience() {
 
   const startScan = useCallback(
     (url: string) => {
+      const token = ++tokenRef.current;
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       lastUrlRef.current = url;
       const isDemo = url.includes(DEMO_SLUG);
 
@@ -76,48 +95,73 @@ export function XRayExperience() {
       setElapsedMs(0);
       setAnalysis(null);
       setError(null);
-      timerDoneRef.current = false;
-      pendingRef.current = null;
       startRef.current = performance.now();
 
       if (isDemo) {
-        // Demo mode: no network at all — resolve after the timer completes.
-        setTimeout(() => {
-          pendingRef.current = { analysis: structuredClone(MOCK_ANALYSIS) };
-          tryFinish();
-        }, TOTAL_SCAN_MS + 50);
+        // Demo mode: no network at all — the readout is explicitly simulated.
+        timerRef.current = window.setTimeout(() => {
+          finish(token, { analysis: structuredClone(MOCK_ANALYSIS) });
+        }, DEMO_SCAN_MS);
         return;
       }
+
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      timerRef.current = window.setTimeout(() => controller.abort(), 65_000);
 
       fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
+        signal: controller.signal,
       })
         .then(async (res) => {
           const payload = (await res.json()) as { ok: boolean; analysis?: RepoAnalysis; error?: AnalysisError };
           if (payload.ok && payload.analysis) {
-            pendingRef.current = { analysis: payload.analysis };
+            finish(token, { analysis: payload.analysis });
           } else {
-            pendingRef.current = {
+            finish(token, {
               error: payload.error ?? { code: "ANALYSIS_FAILED", message: "The analysis failed unexpectedly. Try again." },
-            };
+            });
           }
         })
-        .catch(() => {
-          pendingRef.current = {
-            error: { code: "TIMEOUT", message: "Could not reach the analysis service. Check your connection and try again." },
-          };
-        })
-        .finally(() => tryFinish());
+        .catch((reason: unknown) => {
+          if (token !== tokenRef.current) return;
+          const aborted = reason instanceof DOMException && reason.name === "AbortError";
+          finish(token, {
+            error: aborted
+              ? { code: "TIMEOUT", message: "The scan timed out on this device. The server may still be finishing; try again." }
+              : { code: "TIMEOUT", message: "Could not reach the analysis service. Check your connection and try again." },
+          });
+        });
     },
-    [tryFinish],
+    [finish],
   );
 
+  const cancelScan = useCallback(() => {
+    tokenRef.current++;
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setProgress(0);
+    setStageIndex(0);
+    setError({ code: "CANCELLED", message: "The scan was cancelled. No result was applied." });
+    setPhase("error");
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      controllerRef.current?.abort();
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
   /**
-   * One deterministic timer driver: a single rAF loop maps elapsed time to
-   * (stageIndex, progress) purely from SCAN_STAGES weights. No setInterval
-   * drift, no per-stage timers to tear down.
+   * Illustration-only progress driver. It never gates results: the scan
+   * completes whenever the server responds.
    */
   useEffect(() => {
     if (phase !== "scanning") return;
@@ -125,34 +169,16 @@ export function XRayExperience() {
     const tick = (now: number) => {
       const elapsed = now - startRef.current;
       setElapsedMs(elapsed);
-
-      if (elapsed >= TOTAL_SCAN_MS) {
-        setProgress(100);
-        setStageIndex(SCAN_STAGES.length);
-        timerDoneRef.current = true;
-        tryFinish();
-        return;
-      }
-
-      let acc = 0;
-      let idx = 0;
-      for (let i = 0; i < STAGE_DURATIONS.length; i++) {
-        if (elapsed < acc + STAGE_DURATIONS[i]) {
-          idx = i;
-          break;
-        }
-        acc += STAGE_DURATIONS[i];
-        idx = i + 1; // on a boundary: next stage
-      }
-      setStageIndex(idx);
-      setProgress((elapsed / TOTAL_SCAN_MS) * 100);
-
+      const ratio = Math.min(1, elapsed / PROGRESS_WINDOW_MS);
+      const pct = Math.min(99, ratio * 100);
+      setProgress(pct);
+      setStageIndex(Math.min(SCAN_STAGES.length - 1, Math.floor((pct / 100) * SCAN_STAGES.length)));
       rafRef.current = requestAnimationFrame(tick);
     };
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [phase, tryFinish]);
+  }, [phase]);
 
   const showResults = phase === "complete" && analysis !== null;
   const currentModeIsDemo = analysis ? analysis.analysis.isDemoData : true;
@@ -171,6 +197,7 @@ export function XRayExperience() {
           progress={progress}
           elapsedMs={elapsedMs}
           demoSlug={DEMO_SLUG}
+          onCancel={cancelScan}
           mode={currentModeIsDemo ? "demo" : "live"}
         />
 
@@ -203,7 +230,6 @@ export function XRayExperience() {
           </section>
         )}
       </main>
-      {/* footer rendered by page shell */}
     </div>
   );
 }

@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { Radar } from "lucide-react";
 import { ActionButton } from "@/components/ui/action-button";
-
-/** Accepts https://github.com/owner/repo, github.com/owner/repo, owner/repo.git, etc. */
-const GITHUB_REPO_RE =
-  /^(https?:\/\/)?(www\.)?github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9._-]{1,100}?\/?$/;
+import { parseRepoUrl } from "@/lib/github/parse-url";
 
 export interface ExampleRepo {
   slug: string;
@@ -24,14 +21,23 @@ interface RepoFormProps {
   disabled?: boolean;
 }
 
-/** URL input + ANALYZE trigger with inline validation. */
+/**
+ * URL input + ANALYZE trigger with inline validation.
+ *
+ * Validation uses the SAME parser as the API (`parseRepoUrl`), so every
+ * form the server accepts is accepted here too — previously a hand-written
+ * regex rejected `owner/repo`, `.git` suffixes and `/tree/...` links that
+ * the server would happily analyse.
+ */
 export function RepoForm({ onAnalyze, disabled }: RepoFormProps) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const validate = (value: string): string | null => {
     if (!value.trim()) return "REPOSITORY URL REQUIRED";
-    if (!GITHUB_REPO_RE.test(value.trim())) return "EXPECTED FORMAT: github.com/owner/repository";
+    if (!parseRepoUrl(value)) {
+      return "EXPECTED github.com/owner/repository, owner/repository, or a repository URL";
+    }
     return null;
   };
 
@@ -60,7 +66,7 @@ export function RepoForm({ onAnalyze, disabled }: RepoFormProps) {
             </span>
             <input
               id="repo-url"
-              type="url"
+              type="text"
               inputMode="url"
               autoComplete="off"
               spellCheck={false}

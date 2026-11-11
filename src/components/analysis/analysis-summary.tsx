@@ -5,7 +5,7 @@ import { Panel } from "@/components/ui/panel";
 import { SectionShell } from "@/components/ui/section-shell";
 import { Meter } from "@/components/ui/meter";
 import { DemoBadge } from "@/components/ui/demo-badge";
-import { BAND_COLOR, BAND_LABEL, formatCompact } from "@/lib/utils/format";
+import { BAND_COLOR, BAND_LABEL, BAND_TEXT_COLOR, formatCompact } from "@/lib/utils/format";
 import type { RepoAnalysis } from "@/lib/types/analysis";
 
 const SECTOR_ICON: Record<string, string> = {
@@ -41,12 +41,16 @@ export function AnalysisSummary({ analysis }: { analysis: RepoAnalysis }) {
               <span className="font-mono text-sm text-muted">/ 100</span>
             </div>
             <div className="mt-4">
-              <Meter value={overall.value} duration={1100} />
+              <Meter
+                value={overall.value}
+                label={`Overall engineering score: ${overall.value} out of 100`}
+                duration={1100}
+              />
             </div>
             <dl className="mt-5 grid grid-cols-2 gap-3 font-mono text-[10px] uppercase tracking-[0.14em]">
               <div>
                 <dt className="text-muted">BAND</dt>
-                <dd className="mt-1 font-bold" style={{ color: BAND_COLOR[overall.band] }}>
+                <dd className="mt-1 font-bold" style={{ color: BAND_TEXT_COLOR[overall.band] }}>
                   {BAND_LABEL[overall.band]}
                 </dd>
               </div>
@@ -98,12 +102,21 @@ function SectorCard({ sector, index }: { sector: RepoAnalysis["score"]["sectors"
       <div className="px-4 py-4">
         <div className="flex items-baseline justify-between">
           <span className="font-mono text-3xl font-bold tabular-nums">{sector.score.value}</span>
-          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color }}>
+          <span
+            className="font-mono text-[9px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: BAND_TEXT_COLOR[sector.score.band] }}
+          >
             {BAND_LABEL[sector.score.band]}
           </span>
         </div>
         <div className="mt-3">
-          <Meter value={meterValue} color={color} duration={800} delay={0} />
+          <Meter
+            value={meterValue}
+            color={color}
+            label={`${sector.label} score: ${sector.score.value} out of 100`}
+            duration={800}
+            delay={0}
+          />
         </div>
         <p className="mt-3 text-xs leading-relaxed text-muted">{sector.explanation}</p>
       </div>

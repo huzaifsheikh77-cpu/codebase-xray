@@ -6,13 +6,16 @@ import { CodebaseMap } from "@/components/visualization/codebase-map";
 import { IssuesSection } from "@/components/issues/issues-section";
 import { InsightsSection } from "@/components/insights/insights-section";
 import { SystemStatus } from "@/components/system/system-status";
+import { CoverageSection } from "@/components/system/coverage-section";
+import { AssistantPanel } from "@/components/ai/assistant-panel";
 import { MonoLabel } from "@/components/ui/mono-label";
 import { PartialBanner } from "@/components/ui/demo-badge";
 import { formatCompact, formatClock } from "@/lib/utils/format";
 import type { RepoAnalysis } from "@/lib/types/analysis";
 
-/** Sections /00–/07 rendered purely from the typed analysis object. */
+/** Sections /00–/09 rendered purely from the typed analysis object. */
 export function PresentationLayer({ analysis }: { analysis: RepoAnalysis }) {
+  const coverage = analysis.analysis.coverage;
   return (
     <>
       {/* consecutive degraded-scan notice — only on partial scans */}
@@ -31,7 +34,12 @@ export function PresentationLayer({ analysis }: { analysis: RepoAnalysis }) {
             ["REPOSITORY", analysis.repo.slug],
             ["SCAN ID", analysis.analysis.scanId],
             ["FILES IN TREE", formatCompact(analysis.structure.stats.totalFiles)],
-            ["FILES INSPECTED", formatCompact(analysis.structure.stats.analyzedFiles ?? analysis.structure.stats.totalFiles)],
+            [
+              "FILES INSPECTED",
+              coverage
+                ? `${formatCompact(coverage.inspectedFiles)} (${coverage.inspectedPct}%)`
+                : formatCompact(analysis.structure.stats.analyzedFiles ?? analysis.structure.stats.totalFiles),
+            ],
             ["LINES (EST.)", formatCompact(analysis.structure.stats.linesOfCode)],
           ].map(([k, v]) => (
             <div key={k} className="bg-paper px-3 py-2.5">
@@ -48,6 +56,8 @@ export function PresentationLayer({ analysis }: { analysis: RepoAnalysis }) {
       <IssuesSection issues={analysis.issues} />
       <InsightsSection insights={analysis.insights} />
       <SystemStatus analysis={analysis} />
+      <CoverageSection analysis={analysis} />
+      <AssistantPanel analysis={analysis} />
     </>
   );
 }

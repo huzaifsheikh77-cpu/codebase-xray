@@ -5,6 +5,7 @@ import { ScanOverlay } from "./scan-overlay";
 import { MonoLabel } from "@/components/ui/mono-label";
 import type { ScanPhase } from "@/lib/types/analysis";
 import type { ScanStage } from "@/lib/types/analysis";
+import { ENGINE_LABEL, ENGINE_VERSION } from "@/lib/version";
 
 interface ScanHeroProps {
   phase: ScanPhase;
@@ -16,6 +17,7 @@ interface ScanHeroProps {
   progress: number;
   elapsedMs: number;
   demoSlug: string;
+  onCancel?: () => void;
   /** current analysis mode — drives transcript metadata only */
   mode?: "demo" | "live";
 }
@@ -32,7 +34,7 @@ export function ScanHero(props: ScanHeroProps) {
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <MonoLabel tick>CODEBASE X-RAY — PUBLIC REPOSITORY ANALYZER</MonoLabel>
           <span className="border border-line-strong px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted">
-            ENGINE v2.7.3
+            ENGINE {ENGINE_LABEL}
           </span>
           <span className={`border px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${live ? "border-acid text-ink" : "border-violet text-violet"}`}>
             {live ? "LIVE MODE" : "DEMO MODE"}
@@ -63,7 +65,13 @@ export function ScanHero(props: ScanHeroProps) {
 
           <div>
             {scanning ? (
-              <ScanOverlay stageIndex={props.stageIndex} progress={props.progress} elapsedMs={props.elapsedMs} stages={props.stages} />
+              <ScanOverlay
+                stageIndex={props.stageIndex}
+                progress={props.progress}
+                elapsedMs={props.elapsedMs}
+                stages={props.stages}
+                onCancel={props.onCancel}
+              />
             ) : (
               <div className="border border-line-strong bg-paper">
                 <div className="border-b border-line px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
@@ -73,7 +81,7 @@ export function ScanHero(props: ScanHeroProps) {
                   <p><span className="text-muted">target</span> <span className="text-violet">::</span> {props.repoInput || "—"}</p>
                   <p><span className="text-muted">status</span> <span className="text-violet">::</span> {props.phase === "complete" ? "ANALYSIS COMPLETE" : "AWAITING INPUT"}</p>
                   <p><span className="text-muted">source</span> <span className="text-violet">::</span> {live ? "GITHUB REST API (SERVER-SIDE)" : `${props.demoSlug} (FICTIONAL)`}</p>
-                  <p><span className="text-muted">engine</span> <span className="text-violet">::</span> xray.engine v2.7.3</p>
+                  <p><span className="text-muted">engine</span> <span className="text-violet">::</span> {ENGINE_VERSION}</p>
                   <p><span className="text-muted">network</span> <span className="text-violet">::</span> {live ? "GITHUB API — NO REPO CODE EXECUTED" : "NO OUTBOUND REQUESTS"}</p>
                 </div>
               </div>

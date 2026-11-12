@@ -41,6 +41,10 @@ jobs:
         run: npm test
 
       - name: Analysis accuracy benchmark (local fixtures, no network)
+        env:
+          # Gate output is disposable: canonical records under docs/ are only
+          # refreshed by an explicit, reviewed run.
+          BENCHMARK_OUT_DIR: ${{ runner.temp }}/benchmark
         run: npm run benchmark
 
       - name: Production build
@@ -51,6 +55,9 @@ jobs:
 
       - name: Browser E2E (gated live GitHub case stays skipped)
         run: npm run test:e2e
+
+      - name: Verify tracked working tree is clean after all gates
+        run: npm run release:gates -- --verify-clean
 
       - name: Upload Playwright failure artifacts
         if: failure()

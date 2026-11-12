@@ -44,6 +44,14 @@ reported but excluded from the ratios. Structural assertions are counted separat
 "accuracy %" is reported for arbitrary repositories — this corpus is a conformance guard, not
 a statistical sample.
 
+## Release-gate isolation
+
+`npm run release:gates` runs the documented gates with a tracked-tree guard. During that run
+`BENCHMARK_OUT_DIR` points at a disposable directory, so the committed `latest.json`/`latest.md` are not
+rewritten. The guard records tracked state before each gate, compares it afterwards, and stops with the
+exact changed paths instead of restoring or staging anything. Update the canonical records only
+intentionally, then review and commit that diff on its own.
+
 ## Historical snapshot
 
 The committed `latest.json` and `latest.md` preserve the **2026-11-05** measured run. They were not regenerated for the 2026-11-07 B4.2 release candidate and must not be presented as fresh evidence for it. Rerun only intentionally (optionally with `BENCHMARK_OUT_DIR`) and review the resulting diff.
